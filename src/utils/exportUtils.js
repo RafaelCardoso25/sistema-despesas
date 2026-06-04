@@ -4,7 +4,7 @@ import { applyPlugin } from 'jspdf-autotable';
 
 applyPlugin(jsPDF);
 
-const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 function brl(v) {
   if (v == null || isNaN(v)) return '-';
@@ -23,7 +23,7 @@ function getTeto(d, tetosAjustados) {
 // ─── Excel ────────────────────────────────────────────────────────────────────
 
 export function exportExcel(data, tetosAjustados = {}, metaAnual = null) {
-  const wb     = XLSX.utils.book_new();
+  const wb = XLSX.utils.book_new();
   const sorted = [...data].sort((a, b) => getTeto(b, tetosAjustados) - getTeto(a, tetosAjustados));
 
   const totalAjustado = data.reduce((s, d) => s + getTeto(d, tetosAjustados), 0);
@@ -34,8 +34,8 @@ export function exportExcel(data, tetosAjustados = {}, metaAnual = null) {
   ];
 
   const limBody = sorted.map(d => {
-    const teto     = getTeto(d, tetosAjustados);
-    const ativos   = (d.limite2026 || []).filter(v => v != null);
+    const teto = getTeto(d, tetosAjustados);
+    const ativos = (d.limite2026 || []).filter(v => v != null);
     const mediaLim = ativos.length ? teto / ativos.length : 0;
     return [
       d.cat,
@@ -83,12 +83,12 @@ export function exportExcel(data, tetosAjustados = {}, metaAnual = null) {
 // ─── PDF ──────────────────────────────────────────────────────────────────────
 
 export function exportPDF(data, tetosAjustados = {}, metaAnual = null) {
-  const doc    = new jsPDF({ orientation: 'landscape', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
   const sorted = [...data].sort((a, b) => getTeto(b, tetosAjustados) - getTeto(a, tetosAjustados));
 
-  const totalBase     = data.reduce((s, d) => s + n(d.total), 0);
+  const totalBase = data.reduce((s, d) => s + n(d.total), 0);
   const totalAjustado = data.reduce((s, d) => s + getTeto(d, tetosAjustados), 0);
-  const temMeta       = metaAnual != null;
+  const temMeta = metaAnual != null;
 
   const totalMensal = MESES.map((_, i) =>
     data.reduce((s, d) => s + n(d.vals[i]), 0)
@@ -96,7 +96,7 @@ export function exportPDF(data, tetosAjustados = {}, metaAnual = null) {
   const totalLimite = MESES.map((_, i) =>
     data.reduce((s, d) => {
       const teto = getTeto(d, tetosAjustados);
-      const v    = d.limite2026[i];
+      const v = d.limite2026[i];
       return s + (v != null && n(d.total) > 0 ? (teto / d.total) * v : 0);
     }, 0)
   );
@@ -126,9 +126,9 @@ export function exportPDF(data, tetosAjustados = {}, metaAnual = null) {
 
   if (temMeta) {
     const boxes = [
-      { label: 'META ANUAL 2026',    value: brl(metaAnual),     x: 14  },
-      { label: 'TETO AJUSTADO',      value: brl(totalAjustado), x: 78  },
-      { label: 'HISTORICO 2025',     value: brl(totalBase),     x: 142 },
+      { label: 'META ANUAL 2026', value: brl(metaAnual), x: 14 },
+      { label: 'TETO AJUSTADO', value: brl(totalAjustado), x: 78 },
+      { label: 'HISTORICO 2025', value: brl(totalBase), x: 142 },
       {
         label: 'ECONOMIA PROJETADA',
         value: `${brl(economia)} (${totalBase > 0
@@ -146,16 +146,16 @@ export function exportPDF(data, tetosAjustados = {}, metaAnual = null) {
       doc.text(b.label, b.x + 3, 40);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(b.small ? 7.5 : 10);
-      if (b.label === 'META ANUAL 2026')                         doc.setTextColor(29, 158, 106);
+      if (b.label === 'META ANUAL 2026') doc.setTextColor(29, 158, 106);
       else if (b.label === 'ECONOMIA PROJETADA' && economia < 0) doc.setTextColor(225, 29, 72);
-      else                                                        doc.setTextColor(40, 38, 35);
+      else doc.setTextColor(40, 38, 35);
       doc.text(b.value, b.x + 3, 48);
     });
   } else {
     const boxes = [
-      { label: 'TETO ANUAL 2026', value: brl(totalAjustado),      x: 14  },
-      { label: 'CATEGORIAS',      value: String(data.length),     x: 100 },
-      { label: 'MEDIA MENSAL',    value: brl(totalAjustado / 12), x: 186 },
+      { label: 'TETO ANUAL 2026', value: brl(totalAjustado), x: 14 },
+      { label: 'CATEGORIAS', value: String(data.length), x: 100 },
+      { label: 'MEDIA MENSAL', value: brl(totalAjustado / 12), x: 186 },
     ];
     boxes.forEach(b => {
       doc.setFillColor(245, 244, 240);
@@ -177,9 +177,9 @@ export function exportPDF(data, tetosAjustados = {}, metaAnual = null) {
   doc.text('Limites por Categoria', 14, 60);
 
   const rows1 = sorted.map(d => {
-    const teto     = getTeto(d, tetosAjustados);
-    const ajust    = tetosAjustados[d.cat] != null;
-    const ativos   = (d.limite2026 || []).filter(v => v != null);
+    const teto = getTeto(d, tetosAjustados);
+    const ajust = tetosAjustados[d.cat] != null;
+    const ativos = (d.limite2026 || []).filter(v => v != null);
     const mediaLim = ativos.length ? teto / ativos.length : 0;
     const pctTotal = totalAjustado > 0
       ? (teto / totalAjustado * 100).toFixed(1) + '%'
@@ -223,8 +223,8 @@ export function exportPDF(data, tetosAjustados = {}, metaAnual = null) {
         return;
       }
       if (hook.column.index === 0 &&
-          typeof hook.cell.raw === 'string' &&
-          hook.cell.raw.endsWith(' *')) {
+        typeof hook.cell.raw === 'string' &&
+        hook.cell.raw.endsWith(' *')) {
         hook.cell.styles.textColor = [180, 100, 0];
         hook.cell.styles.fontStyle = 'bold';
       }
@@ -272,7 +272,7 @@ export function exportPDF(data, tetosAjustados = {}, metaAnual = null) {
     ];
   });
 
-  const somaGasto  = totalMensal.reduce((s, v) => s + v, 0);
+  const somaGasto = totalMensal.reduce((s, v) => s + v, 0);
   const somaLimite = totalLimite.reduce((s, v) => s + v, 0);
   mensalRows.push([
     'TOTAL', brl(somaGasto), brl(somaLimite), brl(somaLimite - somaGasto), '100%',
@@ -295,7 +295,7 @@ export function exportPDF(data, tetosAjustados = {}, metaAnual = null) {
       }
       if (hook.column.index === 3 && typeof hook.cell.raw === 'string') {
         if (hook.cell.raw.startsWith('-')) hook.cell.styles.textColor = [225, 29, 72];
-        else                               hook.cell.styles.textColor = [29, 158, 106];
+        else hook.cell.styles.textColor = [29, 158, 106];
       }
     },
   });
@@ -375,7 +375,7 @@ export function buildAlertas(data) {
   const alertas = [];
   data.forEach(d => {
     for (let i = 1; i < 12; i++) {
-      const b    = d.vals[i];
+      const b = d.vals[i];
       const prev = d.vals.slice(0, i).filter(x => x > 0).slice(-1)[0];
       if (!b || !prev) continue;
       const pct = ((b - prev) / prev) * 100;
@@ -401,7 +401,7 @@ export function buildAlertas(data) {
 export function exportComparacaoExcel(resultado) {
   const wb = XLSX.utils.book_new();
 
-  const totalTeto  = resultado.reduce((s, r) => s + n(r.teto), 0);
+  const totalTeto = resultado.reduce((s, r) => s + n(r.teto), 0);
   const totalGasto = resultado.reduce((s, r) => s + n(r.gastoReal), 0);
   const totalSaldo = resultado.reduce((s, r) => s + n(r.saldoRestante), 0);
 
@@ -420,9 +420,9 @@ export function exportComparacaoExcel(resultado) {
       parseFloat(n(r.percentualUsado).toFixed(1)),
       r.estourou ? 'ESTOUROU'
         : r.pago ? 'PAGO'
-        : n(r.percentualUsado) >= 90 ? 'CRITICO'
-        : n(r.percentualUsado) >= 70 ? 'ATENCAO'
-        : 'OK',
+          : n(r.percentualUsado) >= 90 ? 'CRITICO'
+            : n(r.percentualUsado) >= 70 ? 'ATENCAO'
+              : 'OK',
     ]);
 
   body1.push([
@@ -474,12 +474,12 @@ export function exportComparacaoExcel(resultado) {
 export function exportComparacaoPDF(resultado) {
   const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
 
-  const totalTeto   = resultado.reduce((s, r) => s + n(r.teto), 0);
-  const totalGasto  = resultado.reduce((s, r) => s + n(r.gastoReal), 0);
-  const totalSaldo  = resultado.reduce((s, r) => s + n(r.saldoRestante), 0);
+  const totalTeto = resultado.reduce((s, r) => s + n(r.teto), 0);
+  const totalGasto = resultado.reduce((s, r) => s + n(r.gastoReal), 0);
+  const totalSaldo = resultado.reduce((s, r) => s + n(r.saldoRestante), 0);
   const qtdEstourou = resultado.filter(r => r.estourou).length;
-  const qtdPago     = resultado.filter(r => r.pago).length;
-  const qtdCritico  = resultado.filter(
+  const qtdPago = resultado.filter(r => r.pago).length;
+  const qtdCritico = resultado.filter(
     r => !r.estourou && !r.pago && n(r.percentualUsado) >= 90
   ).length;
 
@@ -495,8 +495,8 @@ export function exportComparacaoPDF(resultado) {
   doc.text(`Gerado em: ${new Date().toLocaleDateString('pt-BR')}`, 14, 30);
 
   const boxes = [
-    { label: 'TETO ANUAL',     value: brl(totalTeto),  x: 14  },
-    { label: 'GASTO REAL',     value: brl(totalGasto), x: 82  },
+    { label: 'TETO ANUAL', value: brl(totalTeto), x: 14 },
+    { label: 'GASTO REAL', value: brl(totalGasto), x: 82 },
     { label: 'SALDO RESTANTE', value: brl(totalSaldo), x: 150 },
     {
       label: 'ALERTAS',
@@ -534,9 +534,9 @@ export function exportComparacaoPDF(resultado) {
       `${n(r.percentualUsado).toFixed(1)}%`,
       r.estourou ? 'ESTOUROU'
         : r.pago ? 'PAGO'
-        : n(r.percentualUsado) >= 90 ? 'CRITICO'
-        : n(r.percentualUsado) >= 70 ? 'ATENCAO'
-        : 'OK',
+          : n(r.percentualUsado) >= 90 ? 'CRITICO'
+            : n(r.percentualUsado) >= 70 ? 'ATENCAO'
+              : 'OK',
     ]);
 
   rows.push([
@@ -565,16 +565,16 @@ export function exportComparacaoPDF(resultado) {
       }
       if (hook.column.index === 5) {
         const v = hook.cell.raw;
-        if (v === 'ESTOUROU')     hook.cell.styles.textColor = [225, 29, 72];
-        else if (v === 'PAGO')    hook.cell.styles.textColor = [29, 158, 106];
+        if (v === 'ESTOUROU') hook.cell.styles.textColor = [225, 29, 72];
+        else if (v === 'PAGO') hook.cell.styles.textColor = [29, 158, 106];
         else if (v === 'CRITICO') hook.cell.styles.textColor = [248, 128, 7];
         else if (v === 'ATENCAO') hook.cell.styles.textColor = [180, 100, 0];
-        else                      hook.cell.styles.textColor = [29, 158, 106];
+        else hook.cell.styles.textColor = [29, 158, 106];
         hook.cell.styles.fontStyle = 'bold';
       }
       if (hook.column.index === 3 &&
-          typeof hook.cell.raw === 'string' &&
-          hook.cell.raw.startsWith('-')) {
+        typeof hook.cell.raw === 'string' &&
+        hook.cell.raw.startsWith('-')) {
         hook.cell.styles.textColor = [225, 29, 72];
       }
     },
@@ -624,7 +624,7 @@ export function exportComparacaoPDF(resultado) {
     doc.autoTable({
       startY: 27,
       head: [['Categoria', 'Gasto real', 'Teto efetivo', 'Saldo',
-              ...futureMeses.map(i => MESES[i])]],
+        ...futureMeses.map(i => MESES[i])]],
       body: rows2,
       styles: { fontSize: 6.5, cellPadding: 2.2, textColor: [40, 38, 35] },
       headStyles: { fillColor: [248, 128, 7], textColor: [255, 255, 255], fontStyle: 'bold' },
@@ -637,8 +637,8 @@ export function exportComparacaoPDF(resultado) {
           hook.cell.styles.textColor = [20, 120, 80];
         }
         if (hook.column.index === 3 &&
-            typeof hook.cell.raw === 'string' &&
-            hook.cell.raw.startsWith('-')) {
+          typeof hook.cell.raw === 'string' &&
+          hook.cell.raw.startsWith('-')) {
           hook.cell.styles.textColor = [225, 29, 72];
         }
       },
@@ -686,7 +686,7 @@ export function exportComparacaoPDF(resultado) {
     doc.autoTable({
       startY: 27,
       head: [['Categoria',
-              ...mesesReais.flatMap(i => [`Real ${MESES[i]}`, `Lim ${MESES[i]}`])]],
+        ...mesesReais.flatMap(i => [`Real ${MESES[i]}`, `Lim ${MESES[i]}`])]],
       body: rows3,
       styles: { fontSize: 6, cellPadding: 2, textColor: [40, 38, 35] },
       headStyles: { fillColor: [29, 158, 106], textColor: [255, 255, 255], fontStyle: 'bold' },

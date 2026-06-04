@@ -50,6 +50,7 @@ export default function Dashboard({ session, updateSession, onReset }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
   const { showToast, ToastComponent }   = useToast();
+  const [variacaoSelected, setVariacaoSelected] = useState('');
 
   const {
     baseData,
@@ -393,7 +394,12 @@ export default function Dashboard({ session, updateSession, onReset }) {
           />
         )}
         {tab === 'variacao' && (
-          <TabVariacao data={baseData} />
+          <TabVariacao
+            data={baseData}
+            tetosAjustados={tetosAjustados}
+            selected={variacaoSelected}
+            onSelectChange={setVariacaoSelected}
+          />
         )}
         {tab === 'projecao' && (
           <TabProjecao
