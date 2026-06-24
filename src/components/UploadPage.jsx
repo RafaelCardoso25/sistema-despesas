@@ -1,14 +1,38 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { parseExcel } from '../utils/parseExcel';
 import { loadSession } from '../utils/sessionManager';
 import { ANO_BASE, ANO_ORCAMENTO } from '../config';
+import { useAuth } from '../contexts/AuthContext';
+import { listarSessoes, carregarSessao, deletarSessao } from '../utils/dbSessao';
 
 export default function UploadPage({ onData, onLoadSession, autoSavedSession }) {
-  const [dragging, setDragging] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const inputRef = useRef();
+  const { user } = useAuth();
+
+  const [dragging, setDragging]           = useState(false);
+  const [loading, setLoading]             = useState(false);
+  const [error, setError]                 = useState(null);
+  const [cloudSessoes, setCloudSessoes]   = useState([]);
+  const [loadingCloud, setLoadingCloud]   = useState(false);
+  const [deletando, setDeletando]         = useState(null); // id sendo deletado
+  const inputRef   = useRef();
   const sessionRef = useRef();
+
+  // Carrega sessões da nuvem ao montar (se logado)
+  useEffect(() => {
+    if (!user) return;
+    const fetch = async () => {
+      setLoadingCloud(true);
+      try {
+        const lista = await listarSessoes();
+        setCloudSessoes(lista);
+      } catch (err) {
+        console.warn('Erro ao listar sessões:', err.message);
+      } finally {
+        setLoadingCloud(false);
+      }
+    };
+    fetch();
+  }, [user]);
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -43,6 +67,32 @@ export default function UploadPage({ onData, onLoadSession, autoSavedSession }) 
     }
   };
 
+  const handleLoadCloud = async (id) => {
+    setError(null);
+    setLoading(true);
+    try {
+      const dados = await carregarSessao(id);
+      onLoadSession(dados, id); // passa o id para o App saber qual atualizar
+    } catch (err) {
+      setError('Erro ao carregar sessão da nuvem: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCloud = async (e, id) => {
+    e.stopPropagation();
+    setDeletando(id);
+    try {
+      await deletarSessao(id);
+      setCloudSessoes(prev => prev.filter(s => s.id !== id));
+    } catch (err) {
+      setError('Erro ao deletar sessão: ' + err.message);
+    } finally {
+      setDeletando(null);
+    }
+  };
+
   const onDrop = (e) => {
     e.preventDefault();
     setDragging(false);
@@ -55,51 +105,29 @@ export default function UploadPage({ onData, onLoadSession, autoSavedSession }) 
   const handleDownloadTemplate = () => {
     import('xlsx').then(XLSX => {
       const wb = XLSX.utils.book_new();
-
-      // Cabeçalho — sem coluna Grupo, apenas Categoria + meses
-      const headers = [
-        'Categoria',
-        'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
-        'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
-      ];
-
-      // Exemplos de linhas — só passivos
+      const headers = ['Categoria','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
       const exemplo = [
-        ['Aluguel',          6810, 6810, 6810, 6810, 6810, 6810, 6810, 6810, 6810, 6810, 6810, 6810],
-        ['Energia Elétrica', 1200, 1100, 1300, 1250, 1400, 1500, 1600, 1550, 1350, 1200, 1100, 1300],
-        ['Folha de Pagamento', 45000, 45000, 45000, 45000, 45000, 45000, 45000, 45000, 45000, 45000, 45000, 45000],
-        ['Telefonia / Internet', 800, 800, 800, 800, 800, 800, 800, 800, 800, 800, 800, 800],
-        ['Manutenção',       500, 0, 2000, 0, 500, 0, 3000, 0, 500, 0, 1000, 0],
-        ['Brindes / Eventos', 0, 0, 500, 0, 0, 0, 1200, 0, 0, 0, 3000, 5000],
+        ['Aluguel',           6810,6810,6810,6810,6810,6810,6810,6810,6810,6810,6810,6810],
+        ['Energia Elétrica',  1200,1100,1300,1250,1400,1500,1600,1550,1350,1200,1100,1300],
+        ['Folha de Pagamento',45000,45000,45000,45000,45000,45000,45000,45000,45000,45000,45000,45000],
+        ['Telefonia / Internet',800,800,800,800,800,800,800,800,800,800,800,800],
+        ['Manutenção',        500,0,2000,0,500,0,3000,0,500,0,1000,0],
+        ['Brindes / Eventos', 0,0,500,0,0,0,1200,0,0,0,3000,5000],
       ];
-
       const ws = XLSX.utils.aoa_to_sheet([headers, ...exemplo]);
-
-      // Largura das colunas
-      ws['!cols'] = [
-        { wch: 28 }, // Categoria
-        ...Array(12).fill({ wch: 10 }), // Meses
-      ];
-
-      // Estilo do cabeçalho (negrito) — funciona em xlsx
-      const range = XLSX.utils.decode_range(ws['!ref']);
-      for (let C = range.s.c; C <= range.e.c; C++) {
-        const cellAddr = XLSX.utils.encode_cell({ r: 0, c: C });
-        if (!ws[cellAddr]) continue;
-        ws[cellAddr].s = {
-          font: { bold: true },
-          fill: { fgColor: { rgb: 'E8E6DF' } },
-          alignment: { horizontal: 'center' },
-        };
-      }
-
+      ws['!cols'] = [{ wch: 28 }, ...Array(12).fill({ wch: 10 })];
       XLSX.utils.book_append_sheet(wb, ws, `Gastos ${ANO_BASE}`);
       XLSX.writeFile(wb, `template_orcamento_${ANO_BASE}.xlsx`);
     });
   };
 
+  const formatDate = (iso) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 pb-10">
       <div className="text-center mb-12 fade-up">
         <div className="inline-flex items-center gap-2 bg-jade-50 text-jade-700 text-xs
                         font-mono px-3 py-1 rounded-full mb-6 border border-jade-200">
@@ -115,7 +143,7 @@ export default function UploadPage({ onData, onLoadSession, autoSavedSession }) 
         </p>
       </div>
 
-      {/* Banner sessão autosalva */}
+      {/* Banner sessão autosalva (localStorage) */}
       {autoSavedSession && (
         <div className="w-full max-w-lg mb-4 bg-amber-50 border border-amber-200
                         rounded-xl px-4 py-3 flex items-center justify-between gap-3 fade-up">
@@ -126,7 +154,7 @@ export default function UploadPage({ onData, onLoadSession, autoSavedSession }) 
                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div>
-              <p className="text-xs font-medium text-amber-800">Sessão anterior encontrada</p>
+              <p className="text-xs font-medium text-amber-800">Sessão local encontrada</p>
               <p className="text-xs text-amber-600 font-mono">{autoSavedSession.fileName}</p>
             </div>
           </div>
@@ -137,6 +165,73 @@ export default function UploadPage({ onData, onLoadSession, autoSavedSession }) 
           >
             Restaurar
           </button>
+        </div>
+      )}
+
+      {/* Sessões salvas na nuvem */}
+      {user && (
+        <div className="w-full max-w-lg mb-4 fade-up">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-mono text-ink-400 uppercase tracking-widest">
+              Sessões na nuvem
+            </p>
+            {loadingCloud && (
+              <div className="w-3.5 h-3.5 border-2 border-jade-400 border-t-transparent
+                              rounded-full animate-spin" />
+            )}
+          </div>
+
+          {!loadingCloud && cloudSessoes.length === 0 && (
+            <div className="text-xs text-ink-400 font-mono italic px-1">
+              Nenhuma sessão salva ainda — aparecerá aqui após o primeiro upload.
+            </div>
+          )}
+
+          {cloudSessoes.length > 0 && (
+            <div className="space-y-2">
+              {cloudSessoes.map(s => (
+                <div key={s.id}
+                     onClick={() => handleLoadCloud(s.id)}
+                     className="flex items-center justify-between gap-3 px-4 py-3
+                                bg-white border border-ink-100 rounded-xl cursor-pointer
+                                hover:border-jade-300 hover:bg-jade-50 transition-all group">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Ícone nuvem */}
+                    <svg className="w-4 h-4 text-jade-500 flex-shrink-0" fill="none"
+                         viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                        d="M3 15a4 4 0 004 4h9a5 5 0 10-4.546-2.916A4 4 0 003 15z" />
+                    </svg>
+                    <div className="min-w-0">
+                      <p className="text-sm text-ink-800 font-medium truncate">{s.nome}</p>
+                      <p className="text-xs text-ink-400 font-mono">
+                        Atualizado {formatDate(s.atualizado_em)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => handleDeleteCloud(e, s.id)}
+                    disabled={deletando === s.id}
+                    className="flex-shrink-0 p-1.5 rounded-lg text-ink-300
+                               hover:text-rose-500 hover:bg-rose-50 transition-colors
+                               opacity-0 group-hover:opacity-100"
+                    title="Deletar sessão"
+                  >
+                    {deletando === s.id ? (
+                      <div className="w-3.5 h-3.5 border-2 border-rose-400 border-t-transparent
+                                      rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"
+                           stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
