@@ -10,7 +10,7 @@ function TetoBadge(vp) {
   return <span className="text-xs font-mono text-jade-600">{vp.toFixed(0)}%</span>;
 }
 
-function AjusteModal({ cat, delta, resultado, onAumentarMeta, onCompensar, onClose }) {
+function AjusteModal({ cat, delta, temMeta, resultado, onCompensar, onClose }) {
   const [busca, setBusca]               = useState('');
   const [selecionadas, setSelecionadas] = useState([]);
   const isAumento = delta > 0;
@@ -50,10 +50,8 @@ function AjusteModal({ cat, delta, resultado, onAumentarMeta, onCompensar, onClo
   ).length;
 
   return (
-    <div className="fixed inset-0 bg-ink-900/40 z-50 flex items-center justify-center p-4"
-         onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col"
-           onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-ink-900/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
 
         {/* Header */}
         <div className="px-6 py-4 border-b border-ink-100 flex items-start justify-between">
@@ -78,51 +76,26 @@ function AjusteModal({ cat, delta, resultado, onAumentarMeta, onCompensar, onClo
               ? 'bg-rose-50 border-rose-200 text-rose-800'
               : 'bg-jade-50 border-jade-200 text-jade-800'
             }`}>
-            {isAumento
-              ? <>Você <strong>aumentou</strong> o limite de <strong>{cat}</strong> em{' '}
-                  <strong>{brl(delta)}</strong>. O que deseja fazer com esse acréscimo?</>
-              : <>Você <strong>reduziu</strong> o limite de <strong>{cat}</strong> em{' '}
-                  <strong>{brl(Math.abs(delta))}</strong>. O que deseja fazer com esse saldo liberado?</>
-            }
+            {isAumento ? (
+              <>Você <strong>aumentou</strong> o limite de <strong>{cat}</strong> em{' '}
+                <strong>{brl(delta)}</strong>
+                {temMeta
+                  ? <> e a meta anual já subiu junto automaticamente.</>
+                  : <>.</>}{' '}
+                Se preferir, compense esse valor reduzindo outras categorias
+                {temMeta ? <> (a meta volta ao valor anterior).</> : <> para manter o total.</>}</>
+            ) : (
+              <>Você <strong>reduziu</strong> o limite de <strong>{cat}</strong> em{' '}
+                <strong>{brl(Math.abs(delta))}</strong>
+                {temMeta
+                  ? <> e a meta anual já caiu junto automaticamente.</>
+                  : <>.</>}{' '}
+                Se preferir, distribua esse saldo para outras categorias
+                {temMeta ? <> (a meta volta ao valor anterior).</> : <> para manter o total.</>}</>
+            )}
           </div>
 
-          {/* Opção 1: Ajustar meta */}
-          <button
-            onClick={onAumentarMeta}
-            className="w-full flex items-center gap-4 px-4 py-4 border-2 border-ink-200
-                       rounded-xl hover:border-jade-400 hover:bg-jade-50 text-left
-                       transition-colors"
-          >
-            <div className="w-10 h-10 rounded-xl bg-jade-100 flex items-center
-                            justify-center flex-shrink-0">
-              <svg className="w-5 h-5 text-jade-600" fill="none" viewBox="0 0 24 24"
-                   stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0
-                     002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2
-                     2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2
-                     2 0 01-2-2z" />
-              </svg>
-            </div>
-            <div className="flex-1">
-              <p className="font-medium text-ink-800 text-sm">
-                {isAumento ? 'Aumentar a meta' : 'Reduzir a meta'}
-              </p>
-              <p className="text-xs text-ink-400 mt-0.5">
-                {isAumento
-                  ? `A meta global sobe ${brl(delta)}. As outras categorias não mudam.`
-                  : `A meta global diminui ${brl(Math.abs(delta))}. As outras categorias não mudam.`
-                }
-              </p>
-            </div>
-            <svg className="w-4 h-4 text-ink-300 flex-shrink-0" fill="none"
-                 viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-
-          {/* Opção 2: Compensar em outra categoria */}
+          {/* Opção: Compensar em outra categoria */}
           <div className="border-2 border-ink-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-ink-50 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center
@@ -264,7 +237,9 @@ function AjusteModal({ cat, delta, resultado, onAumentarMeta, onCompensar, onClo
           <button onClick={onClose}
             className="w-full py-2 text-sm border border-ink-200 text-ink-500
                        rounded-xl hover:bg-ink-50">
-            Cancelar (manter apenas o ajuste desta categoria)
+            {temMeta
+              ? 'Manter assim (a meta já foi ajustada)'
+              : 'Manter apenas o ajuste desta categoria'}
           </button>
         </div>
       </div>
@@ -275,10 +250,9 @@ function AjusteModal({ cat, delta, resultado, onAumentarMeta, onCompensar, onClo
 export default function TabLimites({
   data,
   tetosAjustados,
-  onAjustarTeto,
-  onAjustarTetosBatch,
   metaAnual,
-  onAjustarMeta,
+  onEditarTeto,
+  onCompensarTetos,
 }) {
   const [search,      setSearch]      = useState('');
   const [sort,        setSort]        = useState('total_desc');
@@ -300,12 +274,6 @@ export default function TabLimites({
     })),
     [data, tetosAjustados]
   );
-
-  const totalMeta = metaAnual != null
-    ? metaAnual
-    : data.reduce((s, d) =>
-        s + (tetosAjustados[d.cat] != null ? tetosAjustados[d.cat] : d.total), 0
-      );
 
   const somaTetoAtual = data.reduce((s, d) =>
     s + (tetosAjustados[d.cat] != null ? tetosAjustados[d.cat] : d.total), 0
@@ -334,22 +302,17 @@ export default function TabLimites({
     const tetoAnterior = getTeto(cat);
     const delta        = num - tetoAnterior;
 
-    onAjustarTeto(cat, num);
+    // Aplica o teto e a meta já acompanha automaticamente
+    onEditarTeto(cat, num, delta);
     setEditando(null);
 
     if (Math.abs(delta) < 0.01) return;
 
+    // O modal aparece apenas para oferecer a compensação em outras categorias
     setModalAjuste({ cat, novoValor: num, delta, tetoAnterior });
   };
 
-  const handleAjustarMeta = () => {
-    if (!modalAjuste) return;
-    const novaMeta = totalMeta + modalAjuste.delta;
-    onAjustarMeta(novaMeta > 0 ? novaMeta : 0);
-    setModalAjuste(null);
-  };
-
-  // ── Corrigido: usa batch para aplicar todos os ajustes de uma vez ─────────
+  // ── Compensar: distribui o ajuste em outras categorias e mantém a meta ────
   const handleCompensar = (catsDestino, preview) => {
     if (!modalAjuste) return;
     const isAumento = modalAjuste.delta > 0;
@@ -362,7 +325,8 @@ export default function TabLimites({
       return { cat: p.cat, novoTeto };
     });
 
-    onAjustarTetosBatch(ajustes);
+    // deltaRevert desfaz o ajuste automático que a meta sofreu na edição
+    onCompensarTetos(ajustes, modalAjuste.delta);
     setModalAjuste(null);
   };
 
@@ -372,8 +336,8 @@ export default function TabLimites({
         <AjusteModal
           cat={modalAjuste.cat}
           delta={modalAjuste.delta}
+          temMeta={metaAnual != null}
           resultado={resultadoSimples.filter(r => r.cat !== modalAjuste.cat)}
-          onAumentarMeta={handleAjustarMeta}
           onCompensar={handleCompensar}
           onClose={() => setModalAjuste(null)}
         />

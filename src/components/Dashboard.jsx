@@ -71,24 +71,39 @@ export default function Dashboard({ session, updateSession, onReset }) {
 
   // ── Handlers existentes ───────────────────────────────────────────────────
 
-  const handleAjustarTeto = (cat, novoTeto) => {
+  // Edita o teto de uma categoria; se houver meta definida, ela acompanha a
+  // edição automaticamente. Tudo num único update (teto + meta + log atômicos).
+  const handleEditarTeto = (cat, novoTeto, delta) => {
     const novos = { ...tetosAjustados, [cat]: novoTeto };
-    const entry = {
+    const entries = [{
       id: Date.now() + Math.random(),
       timestamp: new Date().toISOString(),
       tipo: 'ajuste_teto',
       catOrigem: cat,
       valor: novoTeto,
       nota: `Teto de "${cat}" ajustado para ${brl(novoTeto)}`,
-    };
-    updateSession({
-      tetosAjustados: novos,
-      logAjustes: [...logAjustes, entry],
-    });
+    }];
+    const patch = { tetosAjustados: novos };
+
+    if (metaAnual != null && Math.abs(delta) >= 0.01) {
+      const novaMeta = metaAnual + delta;
+      patch.metaAnual = novaMeta > 0 ? novaMeta : null;
+      entries.push({
+        id: Date.now() + Math.random(),
+        timestamp: new Date().toISOString(),
+        tipo: 'meta_ajustada',
+        valor: novaMeta > 0 ? novaMeta : 0,
+        nota: `Meta anual ajustada para ${brl(novaMeta > 0 ? novaMeta : 0)} após edição de "${cat}".`,
+      });
+    }
+
+    patch.logAjustes = [...logAjustes, ...entries];
+    updateSession(patch);
   };
 
-  // Aplica vários tetos de uma vez — evita bug de state batch no loop
-  const handleAjustarTetosBatch = (ajustes) => {
+  // Compensa o ajuste em outras categorias: a meta NÃO muda — desfaz o ajuste
+  // automático aplicado na edição (deltaRevert) e redistribui nas demais.
+  const handleCompensarTetos = (ajustes, deltaRevert) => {
     const novos = { ...tetosAjustados };
     const entries = [];
     ajustes.forEach(({ cat, novoTeto }) => {
@@ -99,13 +114,25 @@ export default function Dashboard({ session, updateSession, onReset }) {
         tipo: 'ajuste_teto',
         catOrigem: cat,
         valor: novoTeto,
-        nota: `Teto de "${cat}" ajustado para ${brl(novoTeto)}`,
+        nota: `Teto de "${cat}" ajustado para ${brl(novoTeto)} (compensação)`,
       });
     });
-    updateSession({
-      tetosAjustados: novos,
-      logAjustes: [...logAjustes, ...entries],
-    });
+    const patch = { tetosAjustados: novos };
+
+    if (metaAnual != null && Math.abs(deltaRevert) >= 0.01) {
+      const metaOriginal = metaAnual - deltaRevert;
+      patch.metaAnual = metaOriginal > 0 ? metaOriginal : null;
+      entries.push({
+        id: Date.now() + Math.random(),
+        timestamp: new Date().toISOString(),
+        tipo: 'meta_ajustada',
+        valor: metaOriginal > 0 ? metaOriginal : 0,
+        nota: `Meta anual mantida em ${brl(metaOriginal > 0 ? metaOriginal : 0)} (ajuste compensado em outras categorias).`,
+      });
+    }
+
+    patch.logAjustes = [...logAjustes, ...entries];
+    updateSession(patch);
   };
 
   const handleDeducao = (novasDeducoes) => {
@@ -199,20 +226,6 @@ export default function Dashboard({ session, updateSession, onReset }) {
       logAjustes: [...logAjustes, entry],
     });
     showToast(`Meta de ${brl(novaMeta)} aplicada a todas as categorias.`, 'success');
-  };
-
-  const handleAjustarMeta = (novaMeta) => {
-    const entry = {
-      id: Date.now() + Math.random(),
-      timestamp: new Date().toISOString(),
-      tipo: 'meta_ajustada',
-      nota: `Meta anual ajustada para ${brl(novaMeta)} após edição de limite individual.`,
-      valor: novaMeta,
-    };
-    updateSession({
-      metaAnual: novaMeta > 0 ? novaMeta : null,
-      logAjustes: [...logAjustes, entry],
-    });
   };
 
   const exibeTeto = metaAnual != null ? metaAnual : totalAnual;
@@ -387,10 +400,9 @@ export default function Dashboard({ session, updateSession, onReset }) {
           <TabLimites
             data={baseData}
             tetosAjustados={tetosAjustados}
-            onAjustarTeto={handleAjustarTeto}
-            onAjustarTetosBatch={handleAjustarTetosBatch}
             metaAnual={metaAnual}
-            onAjustarMeta={handleAjustarMeta}
+            onEditarTeto={handleEditarTeto}
+            onCompensarTetos={handleCompensarTetos}
           />
         )}
         {tab === 'variacao' && (

@@ -26,14 +26,19 @@ export default function AdminPage({ onVoltar }) {
   }
 
   async function toggleAprovado(id, aprovadoAtual) {
+    setErro(null);
     setAtualizando(id + '_aprovado');
-    const { error } = await sb
-      .from('usuarios')
-      .update({ aprovado: !aprovadoAtual })
-      .eq('id', id);
-    if (!error) {
+    // Usa RPC SECURITY DEFINER: o update direto na tabela era bloqueado
+    // pelo RLS em silêncio (0 linhas, sem erro) e nada era salvo.
+    const { data, error } = await sb.rpc('admin_set_aprovado', {
+      p_id: id,
+      p_aprovado: !aprovadoAtual,
+    });
+    if (error || !data) {
+      setErro(error?.message || 'Não foi possível salvar a alteração.');
+    } else {
       setUsuarios(prev =>
-        prev.map(u => u.id === id ? { ...u, aprovado: !aprovadoAtual } : u)
+        prev.map(u => u.id === id ? { ...u, aprovado: data.aprovado } : u)
       );
     }
     setAtualizando(null);
@@ -42,14 +47,17 @@ export default function AdminPage({ onVoltar }) {
   async function toggleAdmin(id, adminAtual) {
     // Impede que o próprio admin se rebaixe
     if (id === user?.id && adminAtual) return;
+    setErro(null);
     setAtualizando(id + '_admin');
-    const { error } = await sb
-      .from('usuarios')
-      .update({ admin: !adminAtual })
-      .eq('id', id);
-    if (!error) {
+    const { data, error } = await sb.rpc('admin_set_admin', {
+      p_id: id,
+      p_admin: !adminAtual,
+    });
+    if (error || !data) {
+      setErro(error?.message || 'Não foi possível salvar a alteração.');
+    } else {
       setUsuarios(prev =>
-        prev.map(u => u.id === id ? { ...u, admin: !adminAtual } : u)
+        prev.map(u => u.id === id ? { ...u, admin: data.admin } : u)
       );
     }
     setAtualizando(null);

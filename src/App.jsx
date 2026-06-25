@@ -17,6 +17,10 @@ function AppInner() {
   const [session, setSession]   = useState(null);
   const [view, setView]         = useState('app'); // 'app' | 'admin'
   const cloudIdRef              = useRef(null);
+  const sessionRef             = useRef(null);
+
+  // Mantém sempre a última sessão acessível fora do ciclo de render
+  useEffect(() => { sessionRef.current = session; }, [session]);
 
   // Autosave local + nuvem toda vez que session muda
   useEffect(() => {
@@ -42,6 +46,39 @@ function AppInner() {
 
     return () => clearTimeout(timer);
   }, [session, user]);
+
+  // Proteção: salva na nuvem imediatamente ao fechar/esconder a aba,
+  // eliminando a janela de 2s do debounce em que a última edição se perderia.
+  useEffect(() => {
+    if (!user) return;
+
+    const flush = () => {
+      const s = sessionRef.current;
+      if (!s) return;
+      try {
+        if (cloudIdRef.current) {
+          atualizarSessao(cloudIdRef.current, s);
+        } else {
+          criarSessao(s, buildNomeSessao(s.fileName))
+            .then(reg => { cloudIdRef.current = reg.id; })
+            .catch(() => {});
+        }
+      } catch {
+        /* ignora — o localStorage já guardou a versão mais recente */
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, [user]);
 
   const handleData = (baseData, fileName) => {
     cloudIdRef.current = null;
