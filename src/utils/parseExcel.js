@@ -105,31 +105,50 @@ export function parseWorkbookBuffer(arrayBuffer) {
         // solto — evita confundir uma linha de dados com o cabeçalho.
         let headerRowIdx = -1;
         let monthColMap = {}; // monthNumber (1-12) -> colIndex
-        let melhorScore = 0;
 
+        // Fase 1 (comportamento original, inalterado): primeira linha com 3+ meses.
         for (let i = 0; i < Math.min(15, raw.length); i++) {
           const row = raw[i];
           if (!row) continue;
           const tmp = {};
-          let nomesDeMes = 0; // meses reconhecidos por texto (não número solto)
           for (let c = 0; c < row.length; c++) {
-            const cell = row[c];
-            const m = extractMonth(cell);
-            if (m && tmp[m] == null) {
-              tmp[m] = c; // primeiro encontrado para cada mês
-              const ehNumeroSolto =
-                typeof cell === 'number' ||
-                (typeof cell === 'string' && String(Number(cell.trim())) === cell.trim());
-              if (!ehNumeroSolto) nomesDeMes++;
-            }
+            const m = extractMonth(row[c]);
+            if (m && tmp[m] == null) tmp[m] = c; // primeiro encontrado para cada mês
           }
-          const count = Object.keys(tmp).length;
-          // Aceita: 3+ meses (qualquer formato) OU ao menos 1 nome de mês textual
-          const aceita = count >= 3 || nomesDeMes >= 1;
-          if (aceita && count > melhorScore) {
-            melhorScore = count;
+          if (Object.keys(tmp).length >= 3) {
             headerRowIdx = i;
             monthColMap = tmp;
+            break;
+          }
+        }
+
+        // Fase 2 (fallback só quando a Fase 1 não achou): planilha com poucos
+        // meses (ex.: só junho). Escolhe a linha com mais NOMES de mês textuais
+        // (>=1), ignorando números soltos para não confundir linha de dados.
+        if (headerRowIdx === -1) {
+          let melhorScore = 0;
+          for (let i = 0; i < Math.min(15, raw.length); i++) {
+            const row = raw[i];
+            if (!row) continue;
+            const tmp = {};
+            let nomesDeMes = 0;
+            for (let c = 0; c < row.length; c++) {
+              const cell = row[c];
+              const m = extractMonth(cell);
+              if (m && tmp[m] == null) {
+                tmp[m] = c;
+                const ehNumeroSolto =
+                  typeof cell === 'number' ||
+                  (typeof cell === 'string' && String(Number(cell.trim())) === cell.trim());
+                if (!ehNumeroSolto) nomesDeMes++;
+              }
+            }
+            const count = Object.keys(tmp).length;
+            if (nomesDeMes >= 1 && count > melhorScore) {
+              melhorScore = count;
+              headerRowIdx = i;
+              monthColMap = tmp;
+            }
           }
         }
 
