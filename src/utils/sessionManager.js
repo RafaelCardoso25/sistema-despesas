@@ -3,17 +3,17 @@
  * como um arquivo .json que o usuário pode guardar e recarregar.
  */
 
-const SESSION_VERSION = '1.1'; // bump de versão para refletir o novo campo
+const SESSION_VERSION = '1.2'; // 1.2: biblioteca de comparações reais
 
 export function buildSession({
   baseData,
   tetosAjustados,
-  deducoesAplicadas,
-  comparacaoState,
+  comparacoesSalvas,   // ← lista de comparações reais salvas
+  comparacaoAtivaId,   // ← qual está aberta
   logAjustes,
   mesAtual,
   fileName,
-  metaAnual,        // ← novo campo
+  metaAnual,
 }) {
   return {
     version: SESSION_VERSION,
@@ -22,10 +22,10 @@ export function buildSession({
     mesAtual,
     baseData,
     tetosAjustados,    // { [cat]: novoTeto }
-    deducoesAplicadas,
-    comparacaoState,   // { realData, realFileName, resultado }
+    comparacoesSalvas: comparacoesSalvas ?? [],
+    comparacaoAtivaId: comparacaoAtivaId ?? null,
     logAjustes,
-    metaAnual: metaAnual ?? null,  // ← novo campo
+    metaAnual: metaAnual ?? null,
   };
 }
 

@@ -3,8 +3,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts';
-import { parseExcel } from '../utils/parseExcel';
-import { recalcularLimites, aplicarDeducao, detectarUltimoMes } from '../utils/recalculo';
+import { parseExcel, mergeRealData } from '../utils/parseExcel';
+import { aplicarDeducao, detectarUltimoMes } from '../utils/recalculo';
 import { exportComparacaoExcel, exportComparacaoPDF } from '../utils/exportUtils';
 import { formatLogEntry } from '../utils/sessionManager';
 import { brl } from '../utils/formatters';
@@ -124,10 +124,8 @@ function DeducaoModal({ catOrigem, resultado, onConfirm, onClose }) {
   const canConfirm = valorNum > 0 && selecionadas.length > 0;
 
   return (
-    <div className="fixed inset-0 bg-ink-900/40 z-50 flex items-center justify-center p-4"
-      onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col"
-        onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-ink-900/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
         <div className="px-6 py-4 border-b border-ink-100 flex items-start justify-between">
           <div>
             <h3 className="font-display text-lg text-ink-900">
@@ -244,9 +242,154 @@ function DeducaoModal({ catOrigem, resultado, onConfirm, onClose }) {
   );
 }
 
+function BibliotecaComparacoes({
+  comparacoes, loading, error, onNovaFile, onAbrir, onExcluir, onRenomear,
+}) {
+  const [renomeando, setRenomeando] = useState(null);
+  const [nomeTmp, setNomeTmp]       = useState('');
+  const [confirmarExcluir, setConfirmarExcluir] = useState(null);
+
+  const iniciarRename = (c) => { setRenomeando(c.id); setNomeTmp(c.nome); };
+  const salvarRename  = (id) => {
+    const nome = nomeTmp.trim();
+    if (nome) onRenomear(id, nome);
+    setRenomeando(null);
+  };
+
+  const formatDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR') + ' ' +
+      d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto py-4 space-y-6">
+      <div>
+        <h2 className="font-display text-2xl text-ink-900 mb-1">
+          Comparação com gastos reais 2026
+        </h2>
+        <p className="text-sm text-ink-500 leading-relaxed">
+          Cada comparação guarda suas planilhas reais e as deduções que você fez. Você pode
+          manter várias e abrir a que quiser — nada é perdido ao criar uma nova.
+        </p>
+      </div>
+
+      {comparacoes.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-mono text-ink-400 uppercase tracking-widest">
+            Comparações salvas ({comparacoes.length})
+          </p>
+          {comparacoes.map(c => {
+            const ultimo = detectarUltimoMes(c.realData);
+            const meses  = ultimo >= 0 ? MESES.slice(0, ultimo + 1).join(', ') : 'nenhum';
+            return (
+              <div key={c.id}
+                   className="flex items-center justify-between gap-3 px-4 py-3 bg-white
+                              border border-ink-100 rounded-xl hover:border-jade-300
+                              transition-all group">
+                {renomeando === c.id ? (
+                  <div className="flex-1 flex items-center gap-2"
+                       onClick={e => e.stopPropagation()}>
+                    <input
+                      autoFocus
+                      value={nomeTmp}
+                      onChange={e => setNomeTmp(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter')  salvarRename(c.id);
+                        if (e.key === 'Escape') setRenomeando(null);
+                      }}
+                      className="flex-1 px-3 py-1.5 text-sm border border-jade-400 rounded-lg
+                                 font-mono focus:outline-none"
+                    />
+                    <button onClick={() => salvarRename(c.id)}
+                      className="text-jade-600 hover:text-jade-700 text-xs font-medium">
+                      Salvar
+                    </button>
+                    <button onClick={() => setRenomeando(null)}
+                      className="text-ink-400 hover:text-ink-600 text-xs">
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button onClick={() => onAbrir(c.id)}
+                      className="flex-1 min-w-0 text-left">
+                      <p className="text-sm text-ink-800 font-medium truncate">{c.nome}</p>
+                      <p className="text-xs text-ink-400 font-mono truncate">
+                        {c.realFileName} · meses: {meses}
+                      </p>
+                      <p className="text-xs text-ink-300 font-mono">
+                        Atualizado {formatDate(c.atualizadaEm)}
+                      </p>
+                    </button>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={() => onAbrir(c.id)}
+                        className="px-3 py-1.5 text-xs font-medium bg-jade-50 border
+                                   border-jade-200 text-jade-700 rounded-lg hover:bg-jade-100">
+                        Abrir
+                      </button>
+                      <button onClick={() => iniciarRename(c)}
+                        title="Renomear"
+                        className="p-1.5 rounded-lg text-ink-300 hover:text-ink-600
+                                   hover:bg-ink-50 opacity-0 group-hover:opacity-100 transition">
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"
+                             stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5
+                               m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      {confirmarExcluir === c.id ? (
+                        <button onClick={() => { onExcluir(c.id); setConfirmarExcluir(null); }}
+                          className="px-2 py-1.5 text-xs font-medium bg-rose-500 text-white
+                                     rounded-lg hover:bg-rose-600">
+                          Confirmar
+                        </button>
+                      ) : (
+                        <button onClick={() => setConfirmarExcluir(c.id)}
+                          title="Excluir"
+                          className="p-1.5 rounded-lg text-ink-300 hover:text-rose-500
+                                     hover:bg-rose-50 opacity-0 group-hover:opacity-100 transition">
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"
+                               stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0
+                                 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1
+                                 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div>
+        <p className="text-xs font-mono text-ink-400 uppercase tracking-widest mb-2">
+          {comparacoes.length > 0 ? 'Nova comparação' : 'Primeira comparação'}
+        </p>
+        <UploadZone onFile={onNovaFile} loading={loading} />
+      </div>
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-sm text-rose-700">
+          <strong>Erro:</strong> {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TabComparacao({
-  baseData, tetosAjustados, deducoesAplicadas, mesAtual,
-  onDeducao, onLog, comparacaoState, onComparacaoChange
+  mesAtual,
+  comparacoesSalvas = [], comparacaoAtiva, resultado, onLog,
+  onCriarComparacao, onSelecionarComparacao, onAtualizarComparacao,
+  onExcluirComparacao, onRenomearComparacao,
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -255,23 +398,47 @@ export default function TabComparacao({
   const [sortMode, setSortMode] = useState('estourou');
   const [exporting, setExporting] = useState(null);
   const [modalCat, setModalCat] = useState(null);
+  const mergeInputRef = useRef();
 
-  const realData = comparacaoState?.realData || null;
-  const realFileName = comparacaoState?.realFileName || '';
-  const resultado = comparacaoState?.resultado || null;
+  const realData = comparacaoAtiva?.realData || null;
+  const realFileName = comparacaoAtiva?.realFileName || '';
+  const deducoesAtivas = comparacaoAtiva?.deducoesAplicadas || {};
 
-  const handleFile = async (file) => {
+  // Novo upload → cria uma nova comparação salva
+  const handleFileNova = async (file) => {
     setError(null);
     setLoading(true);
     try {
       const parsed = await parseExcel(file);
-      const calc = recalcularLimites(baseData, parsed, tetosAjustados, deducoesAplicadas);
-      const newState = { realData: parsed, realFileName: file.name, resultado: calc };
-      onComparacaoChange(newState);
-      setSelectedCat(calc[0]?.cat || null);
+      onCriarComparacao(parsed, file.name);
+      setSelectedCat(null);
       onLog(formatLogEntry({
         tipo: 'comparacao_carregada',
-        nota: `Planilha "${file.name}" carregada para comparação.`,
+        nota: `Comparação "${file.name}" criada.`,
+        valor: 0,
+      }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Upload incremental → mescla meses na comparação ativa (mantém deduções)
+  const handleFileMerge = async (file) => {
+    if (!comparacaoAtiva) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const parsed = await parseExcel(file);
+      const merged = mergeRealData(comparacaoAtiva.realData, parsed);
+      onAtualizarComparacao(comparacaoAtiva.id, {
+        realData: merged,
+        realFileName: file.name,
+      });
+      onLog(formatLogEntry({
+        tipo: 'comparacao_carregada',
+        nota: `Meses de "${file.name}" adicionados à comparação "${comparacaoAtiva.nome}".`,
         valor: 0,
       }));
     } catch (err) {
@@ -282,10 +449,9 @@ export default function TabComparacao({
   };
 
   const handleDeducaoConfirm = ({ catOrigem, valorNum, catsDestino, preview }) => {
-    const novasDeducoes = aplicarDeducao(deducoesAplicadas, catOrigem, valorNum, catsDestino, resultado);
-    onDeducao(novasDeducoes);
-    const calc = recalcularLimites(baseData, realData, tetosAjustados, novasDeducoes);
-    onComparacaoChange({ realData, realFileName, resultado: calc });
+    if (!comparacaoAtiva) return;
+    const novasDeducoes = aplicarDeducao(deducoesAtivas, catOrigem, valorNum, catsDestino, resultado);
+    onAtualizarComparacao(comparacaoAtiva.id, { deducoesAplicadas: novasDeducoes });
     setSelectedCat(catOrigem);
     onLog(formatLogEntry({
       tipo: 'deducao',
@@ -307,30 +473,18 @@ export default function TabComparacao({
     }
   };
 
-  // ── Tela de upload (sem dados ainda) ────────────────────────────────────────
-  if (!resultado) {
+  // ── Sem comparação ativa: biblioteca (lista) + criar nova ───────────────────
+  if (!comparacaoAtiva || !resultado) {
     return (
-      <div className="max-w-2xl mx-auto py-4 space-y-6">
-        <div>
-          <h2 className="font-display text-2xl text-ink-900 mb-1">
-            Comparação com gastos reais 2026
-          </h2>
-          <p className="text-sm text-ink-500 leading-relaxed">
-            Faça upload da planilha com os gastos reais de 2026. O sistema compara com os
-            limites e redistribui o saldo nos meses futuros, mantendo proporções históricas.
-          </p>
-        </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
-          <strong>Recálculo proporcional:</strong> se você gastou mais do que o limite em um
-          mês, o sistema reduz os meses seguintes proporcionalmente ao padrão histórico de 2025.
-        </div>
-        <UploadZone onFile={handleFile} loading={loading} />
-        {error && (
-          <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-sm text-rose-700">
-            <strong>Erro:</strong> {error}
-          </div>
-        )}
-      </div>
+      <BibliotecaComparacoes
+        comparacoes={comparacoesSalvas}
+        loading={loading}
+        error={error}
+        onNovaFile={handleFileNova}
+        onAbrir={onSelecionarComparacao}
+        onExcluir={onExcluirComparacao}
+        onRenomear={onRenomearComparacao}
+      />
     );
   }
 
@@ -345,7 +499,7 @@ export default function TabComparacao({
       return a.cat.localeCompare(b.cat, 'pt');
     });
 
-  const catDetail = resultado.find(r => r.cat === selectedCat);
+  const catDetail = resultado.find(r => r.cat === selectedCat) || resultado[0] || null;
   const totalTeto = resultado.reduce((s, r) => s + r.tetoEfetivo, 0);
   const totalGasto = resultado.reduce((s, r) => s + r.gastoReal, 0);
   const totalSaldo = resultado.reduce((s, r) => s + r.saldoRestante, 0);
@@ -388,10 +542,16 @@ export default function TabComparacao({
         />
       )}
 
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-sm text-rose-700">
+          <strong>Erro:</strong> {error}
+        </div>
+      )}
+
       {/* Cabeçalho */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="font-display text-xl text-ink-900">Comparação 2026</h2>
+          <h2 className="font-display text-xl text-ink-900">{comparacaoAtiva.nome}</h2>
           <p className="text-xs text-ink-400 font-mono mt-0.5">
             Real: <span className="text-jade-600">{realFileName}</span>
             · Meses com dados:{' '}
@@ -401,17 +561,42 @@ export default function TabComparacao({
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          {/* Input oculto para o upload incremental */}
+          <input
+            ref={mergeInputRef}
+            type="file"
+            accept=".xls,.xlsx,.xlsm"
+            className="hidden"
+            onChange={e => {
+              const f = e.target.files[0];
+              e.target.value = '';
+              if (f) handleFileMerge(f);
+            }}
+          />
           <button
-            onClick={() => onComparacaoChange(null)}
+            onClick={() => mergeInputRef.current.click()}
+            disabled={loading}
+            title="Enviar uma planilha com meses novos — os meses anteriores e suas deduções são mantidos"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono border
+                       border-jade-300 text-jade-700 bg-jade-50 hover:bg-jade-100
+                       rounded-lg disabled:opacity-50"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 4v16m8-8H4" />
+            </svg>
+            {loading ? 'Processando...' : 'Adicionar/atualizar meses'}
+          </button>
+          <button
+            onClick={() => onSelecionarComparacao(null)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-mono border
                        border-ink-200 text-ink-600 hover:bg-ink-50 rounded-lg"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0
-                   0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
             </svg>
-            Nova planilha
+            Trocar comparação
           </button>
           <button
             onClick={() => handleExport('excel')}
@@ -497,7 +682,7 @@ export default function TabComparacao({
                 const proxMesIdx = r.mesesFuturos.find(i => r.limitesRecalculados[i] != null);
                 const proxMesLim = proxMesIdx != null ? r.limitesRecalculados[proxMesIdx] : null;
                 const proxMesNome = proxMesIdx != null ? MESES[proxMesIdx] : null;
-                const isCurrent = selectedCat === r.cat;
+                const isCurrent = catDetail?.cat === r.cat;
                 return (
                   <div
                     key={r.cat}

@@ -220,7 +220,35 @@ export function parseExcel(file) {
   });
 }
 
-function enrichData(categories) {
+/**
+ * Mescla dados reais 2026 mantendo o histórico já carregado.
+ * Semântica "atualizar mês repetido": um mês presente no arquivo novo
+ * sobrescreve o valor antigo; meses ausentes no arquivo novo permanecem;
+ * categorias que só existem no arquivo novo são adicionadas.
+ * Recomputa total e re-enriquece o resultado.
+ */
+export function mergeRealData(existing = [], incoming = []) {
+  const map = new Map();
+  existing.forEach(d => map.set(d.cat, [...d.vals]));
+
+  incoming.forEach(d => {
+    const cur = map.get(d.cat) || Array(12).fill(null);
+    d.vals.forEach((v, i) => {
+      if (v != null && v > 0) cur[i] = v; // novo sobrescreve mês repetido
+    });
+    map.set(d.cat, cur);
+  });
+
+  const merged = Array.from(map, ([cat, vals]) => ({
+    cat,
+    vals,
+    total: vals.reduce((s, v) => s + (v || 0), 0),
+  }));
+
+  return enrichData(merged);
+}
+
+export function enrichData(categories) {
   return categories.map(d => {
     const { vals, total } = d;
     const activeMeses = vals.filter(v => v > 0).length || 1;

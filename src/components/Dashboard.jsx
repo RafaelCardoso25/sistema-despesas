@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import TabResumo from './TabResumo';
 import TabLimites from './TabLimites';
 import TabVariacao from './TabVariacao';
@@ -10,6 +10,7 @@ import ConfirmModal from './ConfirmModal';
 import { useToast } from './Toast';
 import { exportExcel, exportPDF, buildAlertas } from '../utils/exportUtils';
 import { buildSession, saveSession } from '../utils/sessionManager';
+import { recalcularLimites } from '../utils/recalculo';
 import { brl } from '../utils/formatters';
 import { MESES, ANO_ORCAMENTO } from '../config';
 
@@ -58,9 +59,24 @@ export default function Dashboard({ session, updateSession, onReset }) {
     tetosAjustados,
     logAjustes,
     mesAtual,
-    comparacaoState,
+    comparacoesSalvas = [],
+    comparacaoAtivaId = null,
     metaAnual,
   } = session;
+
+  // Comparação atualmente aberta e seu resultado (recalculado on-the-fly)
+  const comparacaoAtiva = comparacoesSalvas.find(c => c.id === comparacaoAtivaId) || null;
+  const resultadoComparacao = useMemo(() =>
+    comparacaoAtiva
+      ? recalcularLimites(
+          baseData,
+          comparacaoAtiva.realData,
+          tetosAjustados,
+          comparacaoAtiva.deducoesAplicadas || {}
+        )
+      : null,
+    [comparacaoAtiva, baseData, tetosAjustados]
+  );
 
   const totalAnual = baseData.reduce((s, d) =>
     s + (tetosAjustados[d.cat] != null ? tetosAjustados[d.cat] : d.total), 0
@@ -135,16 +151,51 @@ export default function Dashboard({ session, updateSession, onReset }) {
     updateSession(patch);
   };
 
-  const handleDeducao = (novasDeducoes) => {
-    updateSession({ deducoesAplicadas: novasDeducoes });
-  };
-
   const handleLog = (entry) => {
     updateSession({ logAjustes: [...logAjustes, entry] });
   };
 
-  const handleComparacaoChange = (newState) => {
-    updateSession({ comparacaoState: newState });
+  // ── Biblioteca de comparações reais ───────────────────────────────────────
+
+  const handleCriarComparacao = (realData, realFileName) => {
+    const nova = {
+      id: `cmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      nome: realFileName,
+      criadaEm: new Date().toISOString(),
+      atualizadaEm: new Date().toISOString(),
+      realData,
+      realFileName,
+      deducoesAplicadas: {},
+    };
+    updateSession({
+      comparacoesSalvas: [...comparacoesSalvas, nova],
+      comparacaoAtivaId: nova.id,
+    });
+  };
+
+  const handleAtualizarComparacao = (id, patch) => {
+    updateSession({
+      comparacoesSalvas: comparacoesSalvas.map(c =>
+        c.id === id
+          ? { ...c, ...patch, atualizadaEm: new Date().toISOString() }
+          : c
+      ),
+    });
+  };
+
+  const handleSelecionarComparacao = (id) => {
+    updateSession({ comparacaoAtivaId: id });
+  };
+
+  const handleExcluirComparacao = (id) => {
+    updateSession({
+      comparacoesSalvas: comparacoesSalvas.filter(c => c.id !== id),
+      comparacaoAtivaId: comparacaoAtivaId === id ? null : comparacaoAtivaId,
+    });
+  };
+
+  const handleRenomearComparacao = (id, nome) => {
+    handleAtualizarComparacao(id, { nome });
   };
 
   const handleClearLog = () => {
@@ -157,12 +208,12 @@ export default function Dashboard({ session, updateSession, onReset }) {
       const sess = buildSession({
         baseData,
         tetosAjustados,
-        comparacaoState,
+        comparacoesSalvas,
+        comparacaoAtivaId,
         logAjustes,
         mesAtual,
         fileName,
-        deducoesAplicadas: session.deducoesAplicadas || {},
-        metaAnual: session.metaAnual ?? null,
+        metaAnual: metaAnual ?? null,
       });
       saveSession(sess);
       showToast('Sessão salva com sucesso!', 'success');
@@ -391,7 +442,7 @@ export default function Dashboard({ session, updateSession, onReset }) {
             data={baseData}
             tetosAjustados={tetosAjustados}
             mesAtual={mesAtual}
-            comparacaoResultado={comparacaoState?.resultado || null}
+            comparacaoResultado={resultadoComparacao}
             metaAnual={metaAnual}
             onDefinirMeta={handleDefinirMeta}
           />
@@ -418,7 +469,7 @@ export default function Dashboard({ session, updateSession, onReset }) {
             data={baseData}
             tetosAjustados={tetosAjustados}
             mesAtual={mesAtual}
-            comparacaoResultado={comparacaoState?.resultado || null}
+            comparacaoResultado={resultadoComparacao}
             metaAnual={metaAnual}
           />
         )}
@@ -427,14 +478,16 @@ export default function Dashboard({ session, updateSession, onReset }) {
         )}
         {tab === 'comparacao' && (
           <TabComparacao
-            baseData={baseData}
-            tetosAjustados={tetosAjustados}
-            deducoesAplicadas={session.deducoesAplicadas || {}}
             mesAtual={mesAtual}
-            onDeducao={handleDeducao}
+            comparacoesSalvas={comparacoesSalvas}
+            comparacaoAtiva={comparacaoAtiva}
+            resultado={resultadoComparacao}
             onLog={handleLog}
-            comparacaoState={comparacaoState}
-            onComparacaoChange={handleComparacaoChange}
+            onCriarComparacao={handleCriarComparacao}
+            onSelecionarComparacao={handleSelecionarComparacao}
+            onAtualizarComparacao={handleAtualizarComparacao}
+            onExcluirComparacao={handleExcluirComparacao}
+            onRenomearComparacao={handleRenomearComparacao}
           />
         )}
         {tab === 'historico' && (

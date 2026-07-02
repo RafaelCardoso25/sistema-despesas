@@ -12,6 +12,42 @@ function buildNomeSessao(fileName) {
   return `${fileName} — ${data}`;
 }
 
+// Normaliza/migra uma sessão carregada (autosave local, JSON ou nuvem) para o
+// formato atual com biblioteca de comparações reais.
+function migrarSessao(s) {
+  if (!s) return s;
+  const out = {
+    ...s,
+    tetosAjustados:   s.tetosAjustados   || {},
+    logAjustes:       s.logAjustes       || [],
+    mesAtual:         s.mesAtual ?? new Date().getMonth(),
+    metaAnual:        s.metaAnual ?? null,
+    comparacoesSalvas: Array.isArray(s.comparacoesSalvas) ? s.comparacoesSalvas : [],
+    comparacaoAtivaId: s.comparacaoAtivaId ?? null,
+  };
+
+  // Formato antigo: uma comparação única (comparacaoState) + deduções globais.
+  // Converte na primeira comparação salva, preservando o trabalho anterior.
+  if (out.comparacoesSalvas.length === 0 && s.comparacaoState?.realData) {
+    const nova = {
+      id: `cmp_migrado_${Date.now()}`,
+      nome: s.comparacaoState.realFileName || 'Comparação importada',
+      criadaEm: new Date().toISOString(),
+      atualizadaEm: new Date().toISOString(),
+      realData: s.comparacaoState.realData,
+      realFileName: s.comparacaoState.realFileName || '',
+      deducoesAplicadas: s.deducoesAplicadas || {},
+    };
+    out.comparacoesSalvas = [nova];
+    out.comparacaoAtivaId = nova.id;
+  }
+
+  // Campos antigos não são mais usados diretamente
+  delete out.comparacaoState;
+  delete out.deducoesAplicadas;
+  return out;
+}
+
 function AppInner() {
   const { user, isAdmin, loading, logout } = useAuth();
   const [session, setSession]   = useState(null);
@@ -86,26 +122,17 @@ function AppInner() {
       baseData,
       fileName,
       tetosAjustados: {},
-      deducoesAplicadas: {},
       logAjustes: [],
       mesAtual: new Date().getMonth(),
-      comparacaoState: null,
+      comparacoesSalvas: [],
+      comparacaoAtivaId: null,
       metaAnual: null,
     });
   };
 
   const handleLoadSession = (savedSession, cloudId = null) => {
     cloudIdRef.current = cloudId;
-    setSession({
-      baseData: savedSession.baseData,
-      fileName: savedSession.fileName,
-      tetosAjustados: savedSession.tetosAjustados || {},
-      deducoesAplicadas: savedSession.deducoesAplicadas || {},
-      logAjustes: savedSession.logAjustes || [],
-      mesAtual: savedSession.mesAtual ?? new Date().getMonth(),
-      comparacaoState: savedSession.comparacaoState || null,
-      metaAnual: savedSession.metaAnual ?? null,
-    });
+    setSession(migrarSessao(savedSession));
   };
 
   const handleReset = () => {
