@@ -90,34 +90,54 @@ function extractMonth(cell) {
   return null;
 }
 
-export function parseExcel(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+// Lógica pura de parsing a partir do conteúdo do arquivo (ArrayBuffer).
+// Separada do FileReader para poder ser testada fora do navegador.
+// Lança Error (mensagem amigável) em caso de falha.
+export function parseWorkbookBuffer(arrayBuffer) {
+        const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false });
         const rawNums = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
 
-        // ── 1. Encontrar a linha de cabeçalho ──────────────────────────────
-        let headerRowIdx = 0;
+        // ── 1. Encontrar a linha de cabeçalho (a que tem MAIS meses) ───────
+        // Aceita cabeçalhos com poucos meses (ex.: planilha só de junho), desde
+        // que o mês apareça como NOME (Jun / Junho / jun-2026) e não um número
+        // solto — evita confundir uma linha de dados com o cabeçalho.
+        let headerRowIdx = -1;
         let monthColMap = {}; // monthNumber (1-12) -> colIndex
+        let melhorScore = 0;
 
-        for (let i = 0; i < Math.min(10, raw.length); i++) {
+        for (let i = 0; i < Math.min(15, raw.length); i++) {
           const row = raw[i];
           if (!row) continue;
           const tmp = {};
+          let nomesDeMes = 0; // meses reconhecidos por texto (não número solto)
           for (let c = 0; c < row.length; c++) {
-            const m = extractMonth(row[c]);
-            if (m && !tmp[m]) tmp[m] = c; // primeiro encontrado para cada mês
+            const cell = row[c];
+            const m = extractMonth(cell);
+            if (m && tmp[m] == null) {
+              tmp[m] = c; // primeiro encontrado para cada mês
+              const ehNumeroSolto =
+                typeof cell === 'number' ||
+                (typeof cell === 'string' && String(Number(cell.trim())) === cell.trim());
+              if (!ehNumeroSolto) nomesDeMes++;
+            }
           }
-          // Aceita se encontrou pelo menos 3 meses distintos
-          if (Object.keys(tmp).length >= 3) {
+          const count = Object.keys(tmp).length;
+          // Aceita: 3+ meses (qualquer formato) OU ao menos 1 nome de mês textual
+          const aceita = count >= 3 || nomesDeMes >= 1;
+          if (aceita && count > melhorScore) {
+            melhorScore = count;
             headerRowIdx = i;
             monthColMap = tmp;
-            break;
           }
+        }
+
+        if (headerRowIdx === -1) {
+          throw new Error(
+            'Não foi possível identificar os meses no cabeçalho da planilha. ' +
+            'Garanta que a primeira linha tenha os nomes dos meses (ex.: Jan, Fev, … ou Junho).'
+          );
         }
 
         // ── 2. Identificar colunas de total a ignorar ──────────────────────
@@ -203,16 +223,28 @@ export function parseExcel(file) {
         }
 
         if (categories.length === 0) {
-          reject(new Error(
+          throw new Error(
             'Não foi possível identificar categorias na planilha. ' +
             'Verifique se o cabeçalho tem os meses e se há valores numéricos.'
-          ));
-          return;
+          );
         }
 
-        resolve(enrichData(categories));
+        return enrichData(categories);
+}
+
+export function parseExcel(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        resolve(parseWorkbookBuffer(e.target.result));
       } catch (err) {
-        reject(new Error('Erro ao ler planilha: ' + err.message));
+        // Mensagens amigáveis (identificar meses/categorias) passam direto;
+        // erros de baixo nível do XLSX ganham um prefixo explicativo.
+        const msg = err?.message || '';
+        reject(msg.startsWith('Não foi possível')
+          ? err
+          : new Error('Erro ao ler planilha: ' + msg));
       }
     };
     reader.onerror = () => reject(new Error('Erro ao carregar o arquivo.'));
