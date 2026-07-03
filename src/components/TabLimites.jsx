@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { brl } from '../utils/formatters';
 import { MESES } from '../config';
+import ConfirmModal from './ConfirmModal';
 
 function TetoBadge(vp) {
   if (vp == null)  return <span className="text-xs font-mono text-ink-300">n/a</span>;
@@ -253,6 +254,10 @@ export default function TabLimites({
   metaAnual,
   onEditarTeto,
   onCompensarTetos,
+  onResetarTetos,
+  onDesfazer,
+  podeDesfazer,
+  temAjustes,
 }) {
   const [search,      setSearch]      = useState('');
   const [sort,        setSort]        = useState('total_desc');
@@ -260,6 +265,7 @@ export default function TabLimites({
   const [editando,    setEditando]    = useState(null);
   const [editVal,     setEditVal]     = useState('');
   const [modalAjuste, setModalAjuste] = useState(null);
+  const [confirmarReset, setConfirmarReset] = useState(false);
 
   const getTeto = (cat) => {
     const d = data.find(x => x.cat === cat);
@@ -343,6 +349,16 @@ export default function TabLimites({
         />
       )}
 
+      {confirmarReset && (
+        <ConfirmModal
+          title="Resetar todos os limites?"
+          message="Todos os tetos ajustados manualmente voltarão ao histórico de 2025 e a meta anual será removida. Você ainda poderá desfazer logo em seguida com o botão 'Desfazer'."
+          confirmLabel="Sim, resetar"
+          onConfirm={onResetarTetos}
+          onClose={() => setConfirmarReset(false)}
+        />
+      )}
+
       {/* Banner de meta ativa */}
       {metaAnual != null && (
         <div className="mb-4 bg-jade-50 border border-jade-200 rounded-xl px-4 py-3
@@ -394,6 +410,37 @@ export default function TabLimites({
           <option value="total_asc">Menor gasto</option>
           <option value="nome">Alfabética</option>
         </select>
+
+        <button
+          onClick={onDesfazer}
+          disabled={!podeDesfazer}
+          title={podeDesfazer ? 'Desfazer a última alteração de limite/meta' : 'Nada para desfazer'}
+          className="flex items-center gap-1.5 px-3 py-2.5 text-sm border border-ink-200
+                     rounded-xl bg-white text-ink-700 hover:bg-ink-50 transition-colors
+                     disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M3 10h10a5 5 0 015 5v2M3 10l4-4m-4 4l4 4" />
+          </svg>
+          Desfazer
+        </button>
+
+        <button
+          onClick={() => setConfirmarReset(true)}
+          disabled={!temAjustes}
+          title={temAjustes ? 'Voltar todos os tetos ao histórico e remover a meta' : 'Nenhum ajuste para resetar'}
+          className="flex items-center gap-1.5 px-3 py-2.5 text-sm border border-rose-200
+                     rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors
+                     disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0
+                 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Resetar tetos
+        </button>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-xs

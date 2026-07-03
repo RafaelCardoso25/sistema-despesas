@@ -4,6 +4,11 @@ const TIPO_CONFIG = {
   deducao: { label: 'Redistribuição', color: 'bg-rose-50 border-rose-200 text-rose-800', badge: 'bg-rose-100 text-rose-700' },
   ajuste_teto: { label: 'Ajuste de teto', color: 'bg-amber-50 border-amber-200 text-amber-800', badge: 'bg-amber-100 text-amber-700' },
   comparacao_carregada: { label: 'Comparação carregada', color: 'bg-jade-50 border-jade-200 text-jade-800', badge: 'bg-jade-100 text-jade-700' },
+  meta_definida: { label: 'Meta definida', color: 'bg-jade-50 border-jade-200 text-jade-800', badge: 'bg-jade-100 text-jade-700' },
+  meta_ajustada: { label: 'Meta ajustada', color: 'bg-jade-50 border-jade-200 text-jade-800', badge: 'bg-jade-100 text-jade-700' },
+  meta_removida: { label: 'Meta removida', color: 'bg-ink-50 border-ink-200 text-ink-700', badge: 'bg-ink-100 text-ink-600' },
+  reset_tetos: { label: 'Reset de limites', color: 'bg-ink-50 border-ink-200 text-ink-700', badge: 'bg-ink-100 text-ink-600' },
+  desfazer: { label: 'Ação desfeita', color: 'bg-ink-50 border-ink-200 text-ink-700', badge: 'bg-ink-100 text-ink-600' },
 };
 
 export default function TabHistorico({ logAjustes, onClearLog }) {
@@ -77,7 +82,7 @@ export default function TabHistorico({ logAjustes, onClearLog }) {
                   {' '}— teto ajustado para <span className="font-medium">{brl(entry.valor)}</span>
                 </p>
               )}
-              {entry.tipo === 'comparacao_carregada' && (
+              {!['deducao', 'ajuste_teto'].includes(entry.tipo) && entry.nota && (
                 <p className="text-sm opacity-80">{entry.nota}</p>
               )}
             </div>

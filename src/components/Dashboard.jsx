@@ -52,6 +52,9 @@ export default function Dashboard({ session, updateSession, onReset }) {
   const [confirmClear, setConfirmClear] = useState(false);
   const { showToast, ToastComponent }   = useToast();
   const [variacaoSelected, setVariacaoSelected] = useState('');
+  // Pilha de "desfazer" para ações da aba Limites (tetos + meta).
+  // Guarda fotos do estado ANTES de cada ação; desfazer restaura a última foto.
+  const [undoStack, setUndoStack] = useState([]);
 
   const {
     baseData,
@@ -87,9 +90,16 @@ export default function Dashboard({ session, updateSession, onReset }) {
 
   // ── Handlers existentes ───────────────────────────────────────────────────
 
+  // Tira uma "foto" do estado de limites (tetos + meta) antes de uma ação,
+  // para permitir desfazer. Mantém no máximo as últimas 50.
+  const snapshotLimites = () => {
+    setUndoStack(prev => [...prev.slice(-49), { tetosAjustados, metaAnual }]);
+  };
+
   // Edita o teto de uma categoria; se houver meta definida, ela acompanha a
   // edição automaticamente. Tudo num único update (teto + meta + log atômicos).
   const handleEditarTeto = (cat, novoTeto, delta) => {
+    snapshotLimites();
     const novos = { ...tetosAjustados, [cat]: novoTeto };
     const entries = [{
       id: Date.now() + Math.random(),
@@ -120,6 +130,7 @@ export default function Dashboard({ session, updateSession, onReset }) {
   // Compensa o ajuste em outras categorias: a meta NÃO muda — desfaz o ajuste
   // automático aplicado na edição (deltaRevert) e redistribui nas demais.
   const handleCompensarTetos = (ajustes, deltaRevert) => {
+    snapshotLimites();
     const novos = { ...tetosAjustados };
     const entries = [];
     ajustes.forEach(({ cat, novoTeto }) => {
@@ -233,6 +244,44 @@ export default function Dashboard({ session, updateSession, onReset }) {
     } finally {
       setExporting(null);
     }
+  };
+
+  // Reseta todos os tetos manuais e a meta, voltando ao histórico 2025.
+  const handleResetarTetos = () => {
+    snapshotLimites();
+    const entry = {
+      id: Date.now() + Math.random(),
+      timestamp: new Date().toISOString(),
+      tipo: 'reset_tetos',
+      valor: 0,
+      nota: 'Tetos resetados para o histórico 2025 e meta removida.',
+    };
+    updateSession({
+      tetosAjustados: {},
+      metaAnual: null,
+      logAjustes: [...logAjustes, entry],
+    });
+    showToast('Limites resetados para o histórico.', 'success');
+  };
+
+  // Desfaz a última ação de limites, restaurando a foto anterior (tetos + meta).
+  const handleDesfazerLimites = () => {
+    if (undoStack.length === 0) return;
+    const snap = undoStack[undoStack.length - 1];
+    setUndoStack(prev => prev.slice(0, -1));
+    const entry = {
+      id: Date.now() + Math.random(),
+      timestamp: new Date().toISOString(),
+      tipo: 'desfazer',
+      valor: 0,
+      nota: 'Última ação de limites desfeita (voltou ao estado anterior).',
+    };
+    updateSession({
+      tetosAjustados: snap.tetosAjustados,
+      metaAnual: snap.metaAnual,
+      logAjustes: [...logAjustes, entry],
+    });
+    showToast('Ação desfeita.', 'success');
   };
 
   // ── Handlers da meta ──────────────────────────────────────────────────────
@@ -454,6 +503,10 @@ export default function Dashboard({ session, updateSession, onReset }) {
             metaAnual={metaAnual}
             onEditarTeto={handleEditarTeto}
             onCompensarTetos={handleCompensarTetos}
+            onResetarTetos={handleResetarTetos}
+            onDesfazer={handleDesfazerLimites}
+            podeDesfazer={undoStack.length > 0}
+            temAjustes={Object.keys(tetosAjustados).length > 0 || metaAnual != null}
           />
         )}
         {tab === 'variacao' && (
