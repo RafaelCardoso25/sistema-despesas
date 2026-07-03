@@ -130,7 +130,9 @@ export default function Dashboard({ session, updateSession, onReset }) {
   // Compensa o ajuste em outras categorias: a meta NÃO muda — desfaz o ajuste
   // automático aplicado na edição (deltaRevert) e redistribui nas demais.
   const handleCompensarTetos = (ajustes, deltaRevert) => {
-    snapshotLimites();
+    // Não tira nova foto: a compensação é a continuação da mesma edição
+    // (handleEditarTeto já fotografou o estado ANTES da edição). Assim,
+    // "editar + compensar" conta como UMA só mudança para o Desfazer.
     const novos = { ...tetosAjustados };
     const entries = [];
     ajustes.forEach(({ cat, novoTeto }) => {
