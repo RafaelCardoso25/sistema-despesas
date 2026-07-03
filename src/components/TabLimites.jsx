@@ -11,7 +11,7 @@ function TetoBadge(vp) {
   return <span className="text-xs font-mono text-jade-600">{vp.toFixed(0)}%</span>;
 }
 
-function AjusteModal({ cat, delta, temMeta, resultado, onCompensar, onClose }) {
+function AjusteModal({ cat, delta, temMeta, resultado, onAplicarMeta, onCompensar, onClose }) {
   const [busca, setBusca]               = useState('');
   const [selecionadas, setSelecionadas] = useState([]);
   const isAumento = delta > 0;
@@ -58,7 +58,7 @@ function AjusteModal({ cat, delta, temMeta, resultado, onCompensar, onClose }) {
         <div className="px-6 py-4 border-b border-ink-100 flex items-start justify-between">
           <div>
             <h3 className="font-display text-lg text-ink-900">
-              {isAumento ? 'Limite aumentado' : 'Limite reduzido'}
+              {isAumento ? 'Aumentar limite' : 'Reduzir limite'}
             </h3>
             <p className="text-xs text-ink-400 font-mono mt-0.5">{cat}</p>
           </div>
@@ -78,25 +78,58 @@ function AjusteModal({ cat, delta, temMeta, resultado, onCompensar, onClose }) {
               : 'bg-jade-50 border-jade-200 text-jade-800'
             }`}>
             {isAumento ? (
-              <>Você <strong>aumentou</strong> o limite de <strong>{cat}</strong> em{' '}
-                <strong>{brl(delta)}</strong>
-                {temMeta
-                  ? <> e a meta anual já subiu junto automaticamente.</>
-                  : <>.</>}{' '}
-                Se preferir, compense esse valor reduzindo outras categorias
-                {temMeta ? <> (a meta volta ao valor anterior).</> : <> para manter o total.</>}</>
+              <>Você quer <strong>aumentar</strong> o limite de <strong>{cat}</strong> em{' '}
+                <strong>{brl(delta)}</strong>. Escolha como aplicar abaixo — {' '}
+                <strong>nada é alterado</strong> até você confirmar.</>
             ) : (
-              <>Você <strong>reduziu</strong> o limite de <strong>{cat}</strong> em{' '}
-                <strong>{brl(Math.abs(delta))}</strong>
-                {temMeta
-                  ? <> e a meta anual já caiu junto automaticamente.</>
-                  : <>.</>}{' '}
-                Se preferir, distribua esse saldo para outras categorias
-                {temMeta ? <> (a meta volta ao valor anterior).</> : <> para manter o total.</>}</>
+              <>Você quer <strong>reduzir</strong> o limite de <strong>{cat}</strong> em{' '}
+                <strong>{brl(Math.abs(delta))}</strong>. Escolha como aplicar abaixo — {' '}
+                <strong>nada é alterado</strong> até você confirmar.</>
             )}
           </div>
 
-          {/* Opção: Compensar em outra categoria */}
+          {/* Opção 1: Ajustar a meta (ou apenas aplicar, se não há meta) */}
+          <button
+            onClick={onAplicarMeta}
+            className="w-full flex items-center gap-4 px-4 py-4 border-2 border-ink-200
+                       rounded-xl hover:border-jade-400 hover:bg-jade-50 text-left
+                       transition-colors"
+          >
+            <div className="w-10 h-10 rounded-xl bg-jade-100 flex items-center
+                            justify-center flex-shrink-0">
+              <svg className="w-5 h-5 text-jade-600" fill="none" viewBox="0 0 24 24"
+                   stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0
+                     002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2
+                     2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2
+                     2 0 01-2-2z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="font-medium text-ink-800 text-sm">
+                {temMeta
+                  ? (isAumento ? 'Aumentar a meta' : 'Reduzir a meta')
+                  : 'Apenas aplicar o novo limite'}
+              </p>
+              <p className="text-xs text-ink-400 mt-0.5">
+                {temMeta
+                  ? (isAumento
+                      ? `A meta anual sobe ${brl(delta)}. As outras categorias não mudam.`
+                      : `A meta anual diminui ${brl(Math.abs(delta))}. As outras categorias não mudam.`)
+                  : (isAumento
+                      ? `Aplica o novo limite. O total sobe ${brl(delta)}.`
+                      : `Aplica o novo limite. O total diminui ${brl(Math.abs(delta))}.`)}
+              </p>
+            </div>
+            <svg className="w-4 h-4 text-ink-300 flex-shrink-0" fill="none"
+                 viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+
+          {/* Opção 2: Compensar em outra categoria */}
           <div className="border-2 border-ink-200 rounded-xl overflow-hidden">
             <div className="px-4 py-3 bg-ink-50 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center
@@ -238,9 +271,7 @@ function AjusteModal({ cat, delta, temMeta, resultado, onCompensar, onClose }) {
           <button onClick={onClose}
             className="w-full py-2 text-sm border border-ink-200 text-ink-500
                        rounded-xl hover:bg-ink-50">
-            {temMeta
-              ? 'Manter assim (a meta já foi ajustada)'
-              : 'Manter apenas o ajuste desta categoria'}
+            Cancelar (não aplicar nada)
           </button>
         </div>
       </div>
@@ -308,17 +339,23 @@ export default function TabLimites({
     const tetoAnterior = getTeto(cat);
     const delta        = num - tetoAnterior;
 
-    // Aplica o teto e a meta já acompanha automaticamente
-    onEditarTeto(cat, num, delta);
     setEditando(null);
 
-    if (Math.abs(delta) < 0.01) return;
+    if (Math.abs(delta) < 0.01) return; // nada mudou
 
-    // O modal aparece apenas para oferecer a compensação em outras categorias
+    // NÃO aplica nada ainda — o modal decide (ajustar a meta ou compensar).
+    // Se o usuário fechar/cancelar, nada é alterado.
     setModalAjuste({ cat, novoValor: num, delta, tetoAnterior });
   };
 
-  // ── Compensar: distribui o ajuste em outras categorias e mantém a meta ────
+  // ── Opção 1: aplica o novo teto ajustando a meta junto ────────────────────
+  const handleAplicarMeta = () => {
+    if (!modalAjuste) return;
+    onEditarTeto(modalAjuste.cat, modalAjuste.novoValor, modalAjuste.delta);
+    setModalAjuste(null);
+  };
+
+  // ── Opção 2: aplica o novo teto compensando em outras categorias ──────────
   const handleCompensar = (catsDestino, preview) => {
     if (!modalAjuste) return;
     const isAumento = modalAjuste.delta > 0;
@@ -331,8 +368,9 @@ export default function TabLimites({
       return { cat: p.cat, novoTeto };
     });
 
-    // deltaRevert desfaz o ajuste automático que a meta sofreu na edição
-    onCompensarTetos(ajustes, modalAjuste.delta);
+    // Inclui a própria categoria editada; a meta não muda nesse caminho
+    ajustes.push({ cat: modalAjuste.cat, novoTeto: modalAjuste.novoValor });
+    onCompensarTetos(ajustes);
     setModalAjuste(null);
   };
 
@@ -344,6 +382,7 @@ export default function TabLimites({
           delta={modalAjuste.delta}
           temMeta={metaAnual != null}
           resultado={resultadoSimples.filter(r => r.cat !== modalAjuste.cat)}
+          onAplicarMeta={handleAplicarMeta}
           onCompensar={handleCompensar}
           onClose={() => setModalAjuste(null)}
         />

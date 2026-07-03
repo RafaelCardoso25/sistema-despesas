@@ -129,10 +129,10 @@ export default function Dashboard({ session, updateSession, onReset }) {
 
   // Compensa o ajuste em outras categorias: a meta NÃO muda — desfaz o ajuste
   // automático aplicado na edição (deltaRevert) e redistribui nas demais.
-  const handleCompensarTetos = (ajustes, deltaRevert) => {
-    // Não tira nova foto: a compensação é a continuação da mesma edição
-    // (handleEditarTeto já fotografou o estado ANTES da edição). Assim,
-    // "editar + compensar" conta como UMA só mudança para o Desfazer.
+  // Aplica a edição compensando em outras categorias: a meta NÃO muda. Recebe
+  // a lista completa de tetos a gravar (a categoria editada + as que absorvem).
+  const handleCompensarTetos = (ajustes) => {
+    snapshotLimites();
     const novos = { ...tetosAjustados };
     const entries = [];
     ajustes.forEach(({ cat, novoTeto }) => {
@@ -146,22 +146,10 @@ export default function Dashboard({ session, updateSession, onReset }) {
         nota: `Teto de "${cat}" ajustado para ${brl(novoTeto)} (compensação)`,
       });
     });
-    const patch = { tetosAjustados: novos };
-
-    if (metaAnual != null && Math.abs(deltaRevert) >= 0.01) {
-      const metaOriginal = metaAnual - deltaRevert;
-      patch.metaAnual = metaOriginal > 0 ? metaOriginal : null;
-      entries.push({
-        id: Date.now() + Math.random(),
-        timestamp: new Date().toISOString(),
-        tipo: 'meta_ajustada',
-        valor: metaOriginal > 0 ? metaOriginal : 0,
-        nota: `Meta anual mantida em ${brl(metaOriginal > 0 ? metaOriginal : 0)} (ajuste compensado em outras categorias).`,
-      });
-    }
-
-    patch.logAjustes = [...logAjustes, ...entries];
-    updateSession(patch);
+    updateSession({
+      tetosAjustados: novos,
+      logAjustes: [...logAjustes, ...entries],
+    });
   };
 
   const handleLog = (entry) => {
