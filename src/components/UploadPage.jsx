@@ -366,6 +366,10 @@ export default function UploadPage({ onData, onLoadSession, autoSavedSession }) 
         <p className="text-xs text-ink-400 mt-2 font-mono">
           Também aceita: Jan-2025 · Janeiro · 01/01/2025 · january
         </p>
+        <p className="text-xs text-ink-400 mt-1 font-mono">
+          Despesas lançadas como negativo (-1.234) são lidas normalmente ·
+          linhas de receita e de total são ignoradas
+        </p>
       </div>
     </div>
   );

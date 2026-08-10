@@ -90,6 +90,41 @@ function extractMonth(cell) {
   return null;
 }
 
+// Converte uma célula em número (aceita número puro ou texto "1.234,56").
+function toNumber(v) {
+  if (typeof v === 'number') return v;
+  return parseFloat(String(v || '').replace(',', '.'));
+}
+
+/**
+ * Detecta se a planilha usa a convenção "despesa lançada como negativo"
+ * (comum em exportações de ERP/contabilidade, onde tudo vem com sinal `-`).
+ *
+ * Regra: só considera invertida quando há pelo menos um negativo E os
+ * negativos são a maioria (>= positivos). Assim:
+ *   - planilha toda negativa  → invertida, valores viram positivos;
+ *   - planilha toda positiva  → intocada (comportamento de sempre);
+ *   - planilha positiva com um estorno negativo solto → intocada, o
+ *     negativo segue sendo ignorado como antes (evita inflar o total).
+ */
+export function detectarSinalInvertido(rows, headerRowIdx, monthColMap, totalCols = new Set()) {
+  let negativos = 0;
+  let positivos = 0;
+
+  for (let r = headerRowIdx + 1; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    for (const colIdx of Object.values(monthColMap)) {
+      if (totalCols.has(colIdx)) continue;
+      const num = toNumber(row[colIdx]);
+      if (isNaN(num) || num === 0) continue;
+      if (num < 0) negativos++; else positivos++;
+    }
+  }
+
+  return negativos > 0 && negativos >= positivos;
+}
+
 // Lógica pura de parsing a partir do conteúdo do arquivo (ArrayBuffer).
 // Separada do FileReader para poder ser testada fora do navegador.
 // Lança Error (mensagem amigável) em caso de falha.
@@ -173,7 +208,14 @@ export function parseWorkbookBuffer(arrayBuffer) {
         const monthKeys = Object.keys(monthColMap).map(Number);
         const dataColStart = monthColMap[Math.min(...monthKeys)];
 
-        // ── 4. Ler categorias ──────────────────────────────────────────────
+        // ── 4. Normalizar sinal (planilha de despesas com valores negativos) ──
+        // Se a planilha lança despesa como negativo, invertemos o sinal de
+        // TODA a leitura. Daí pra frente o sistema continua trabalhando só
+        // com positivos, exatamente como antes — nada mais precisa mudar.
+        const sinalInvertido = detectarSinalInvertido(rawNums, headerRowIdx, monthColMap, totalCols);
+        const fatorSinal = sinalInvertido ? -1 : 1;
+
+        // ── 5. Ler categorias ──────────────────────────────────────────────
         const categories = [];
         for (let r = headerRowIdx + 1; r < rawNums.length; r++) {
           const row     = rawNums[r]; // valores numéricos brutos
@@ -212,8 +254,7 @@ export function parseWorkbookBuffer(arrayBuffer) {
           if (Object.keys(monthColMap).length > 0) {
             for (const [monthNum, colIdx] of Object.entries(monthColMap)) {
               if (totalCols.has(colIdx)) continue;
-              const v = row[colIdx];
-              const num = typeof v === 'number' ? v : parseFloat(String(v || '').replace(',', '.'));
+              const num = toNumber(row[colIdx]) * fatorSinal;
               if (!isNaN(num) && num > 0) {
                 vals[Number(monthNum) - 1] = num;
                 numCount++;
@@ -224,8 +265,7 @@ export function parseWorkbookBuffer(arrayBuffer) {
             let mIdx = 0;
             for (let c = dataColStart; c < row.length && mIdx < 12; c++) {
               if (totalCols.has(c)) continue;
-              const v = row[c];
-              const num = typeof v === 'number' ? v : parseFloat(String(v || '').replace(',', '.'));
+              const num = toNumber(row[c]) * fatorSinal;
               if (!isNaN(num)) {
                 vals[mIdx] = num > 0 ? num : null;
                 if (num > 0) numCount++;
