@@ -52,8 +52,20 @@ export function recalcularLimites(baseData, realData2026, tetosAjustados = {}, d
   const ultimoMesReal = mesesComDados.lastIndexOf(true);
 
   // ── Processa categorias normais (existem em 2025) ────────────────────────
+  // Num mês que foi reportado, categoria sem lançamento significa que ela
+  // gastou ZERO — não que o mês não veio. O parser descarta zeros (e some com
+  // a categoria toda quando ela zerou o ano inteiro), então "gastou R$ 0"
+  // chegava aqui como null, igualzinho a "mês não enviado": a planilha parecia
+  // não ter sido subida e a economia do mês não aparecia.
+  const comZeroReportado = (vals) =>
+    Array.from({ length: 12 }, (_, i) => {
+      const v = vals ? vals[i] : null;
+      if (v != null) return v;
+      return mesesComDados[i] ? 0 : null;
+    });
+
   const resultadoBase = baseData.map(base => {
-    const real = realMap[base.cat] || Array(12).fill(null);
+    const real = comZeroReportado(realMap[base.cat]);
     const gastoReal = real.reduce((s, v) => s + (v || 0), 0);
 
     const tetoBase = tetosAjustados[base.cat] != null ? tetosAjustados[base.cat] : base.total;
@@ -130,7 +142,7 @@ export function recalcularLimites(baseData, realData2026, tetosAjustados = {}, d
 
   // ── Processa categorias novas (só existem em 2026) ───────────────────────
   const resultadoNovas = catsNovas.map(nova => {
-    const real = nova.vals;
+    const real = comZeroReportado(nova.vals);
     const gastoReal = real.reduce((s, v) => s + (v || 0), 0);
 
     // Teto = 0 porque não havia previsão em 2025
