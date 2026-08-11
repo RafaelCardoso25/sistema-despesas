@@ -906,7 +906,11 @@ export default function TabComparacao({
                     </thead>
                     <tbody className="divide-y divide-ink-50">
                       {MESES.map((m, i) => {
-                        const isReal = i <= catDetail.ultimoMesReal;
+                        // Só é "realizado" o mês que tem gasto lançado — quem
+                        // sobe só julho não tem dado de janeiro a junho.
+                        const isReal = catDetail.mesesComDados
+                          ? catDetail.mesesComDados[i]
+                          : i <= catDetail.ultimoMesReal;
                         const isFuturo = i > catDetail.ultimoMesReal;
                         const isCur = i === mesAtual;
                         const real = catDetail.real[i];

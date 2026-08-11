@@ -44,6 +44,8 @@ export function recalcularLimites(baseData, realData2026, tetosAjustados = {}, d
   // ── Detecta categorias novas (existem em 2026 mas não em 2025) ──────────
   const catsNovas = realData2026.filter(d => !catsBase.has(d.cat));
 
+  // Quais meses REALMENTE têm gasto lançado. Não é um bloco contínuo a partir
+  // de janeiro: quem sobe só julho tem dados apenas em julho.
   const mesesComDados = Array.from({ length: 12 }, (_, i) =>
     Object.values(realMap).some(vals => vals[i] != null && vals[i] > 0)
   );
@@ -118,6 +120,7 @@ export function recalcularLimites(baseData, realData2026, tetosAjustados = {}, d
       variacoesRecalc,
       diferencas,
       ultimoMesReal,
+      mesesComDados,
       mesesFuturos,
       valsBase: base.vals,
       variacoesBase: base.variacoes,
@@ -187,6 +190,7 @@ export function recalcularLimites(baseData, realData2026, tetosAjustados = {}, d
       variacoesRecalc: Array(12).fill(null),
       diferencas,
       ultimoMesReal,
+      mesesComDados,
       mesesFuturos,
       valsBase: Array(12).fill(0),
       variacoesBase: Array(12).fill(null),

@@ -44,29 +44,38 @@ export default function TabProjecao({
     projecaoMensal,
     statusProjecao,
   } = useMemo(() => {
-    const mesesComDados = mesAtual;
+    // Quais meses têm gasto real lançado. Quem sobe só julho tem dados apenas
+    // em julho — não dá para assumir um bloco contínuo desde janeiro, senão o
+    // ritmo médio é dividido por meses vazios e a projeção despenca.
+    const temReal = comparacaoResultado
+      ? MESES.map((_, i) => comparacaoResultado.some(r => (r.real[i] || 0) > 0))
+      : MESES.map((_, i) => i <= mesAtual);
+
+    const ultimoReal   = temReal.lastIndexOf(true);
+    const qtdMesesReal = temReal.filter(Boolean).length;
+
+    // Projetamos os meses depois do último com dado. Meses anteriores sem dado
+    // ficam de fora: não são "realizados" (nada foi lançado) nem projetáveis
+    // (já passaram).
+    const ehProjetado = MESES.map((_, i) => i > ultimoReal);
+
     let gastoAcumulado = 0;
 
     if (comparacaoResultado) {
-      gastoAcumulado = comparacaoResultado.reduce((s, r) => {
-        const gastoAte = r.real
-          .slice(0, mesesComDados + 1)
-          .reduce((a, v) => a + (v || 0), 0);
-        return s + gastoAte;
-      }, 0);
+      gastoAcumulado = comparacaoResultado.reduce((s, r) =>
+        s + r.real.reduce((a, v, i) => a + (temReal[i] ? (v || 0) : 0), 0), 0);
     } else {
       gastoAcumulado = data.reduce((s, d) => {
         const teto = getTeto(d);
         const fatorAjuste = d.total > 0 ? teto / d.total : 1;
         const gastoAte = d.vals
-          .slice(0, mesesComDados + 1)
-          .reduce((a, v) => a + (v || 0) * fatorAjuste, 0);
+          .reduce((a, v, i) => a + (temReal[i] ? (v || 0) * fatorAjuste : 0), 0);
         return s + gastoAte;
       }, 0);
     }
 
-    const mesesDecorridos = mesesComDados + 1;
-    const mesesRestantes  = 12 - mesesDecorridos;
+    const mesesDecorridos = qtdMesesReal;
+    const mesesRestantes  = ehProjetado.filter(Boolean).length;
     const ritmoMedio      = mesesDecorridos > 0 ? gastoAcumulado / mesesDecorridos : 0;
     const projecaoFinal   = gastoAcumulado + ritmoMedio * mesesRestantes;
     const limiteRestante  = totalTeto - gastoAcumulado;
@@ -90,11 +99,11 @@ export default function TabProjecao({
         return s + (lim != null && d.total > 0 ? (teto / d.total) * lim : 0);
       }, 0);
 
-      if (comparacaoResultado && i <= mesesComDados) {
+      if (comparacaoResultado && temReal[i]) {
         gastoReal = comparacaoResultado.reduce(
           (s, r) => s + (r.real[i] || 0), 0
         );
-      } else if (i > mesesComDados) {
+      } else if (ehProjetado[i]) {
         const pesoMes = limiteOriginal > 0
           ? limiteOriginal / (totalTeto / 12)
           : 1;
@@ -381,7 +390,7 @@ export default function TabProjecao({
           <div className="px-5 py-4 border-b border-ink-50">
             <h3 className="font-display text-lg text-ink-900">Detalhe por mês</h3>
             <p className="text-xs text-ink-400 mt-0.5">
-              ● meses com dados reais · ◐ meses projetados
+              ● meses com dados reais · ◐ meses projetados · ○ meses sem dados
             </p>
           </div>
           <div className="overflow-auto max-h-72">
